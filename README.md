@@ -13,7 +13,7 @@ pip install -r requirements.txt"
 
 3. Execute the main script:
 ```bash
-"python main.py"
+python main.py
 ```
 
 Results will be saved in the dump directory.
