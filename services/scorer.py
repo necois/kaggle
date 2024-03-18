@@ -5,10 +5,17 @@ import matplotlib.pyplot as plt
 from typing import Dict, List
 from pathlib import Path
 from sklearn.preprocessing import label_binarize
-from sklearn.metrics import roc_auc_score, confusion_matrix, ConfusionMatrixDisplay, classification_report
+from sklearn.metrics import (
+    roc_auc_score,
+    confusion_matrix,
+    ConfusionMatrixDisplay,
+    classification_report,
+)
+
 
 class LightGBMScorer:
     DUMP_DIR: Path = Path("dump")
+
     def __init__(self, X_test: pd.DataFrame, y_test: pd.Series, class_label_dict: Dict):
         self.DUMP_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -19,22 +26,30 @@ class LightGBMScorer:
         self.classes: List[int] = list(self.class_label_dict.keys())
         self.labels: List[str] = list(self.class_label_dict.values())
 
-    def plot_results(self, booster: lightgbm.Booster, evals_result: Dict, dump_prefix: str) -> str:
+    def plot_results(
+        self,
+        booster: lightgbm.Booster,
+        evals_result: Dict,
+        metric_name: str,
+        dump_prefix: str,
+    ) -> str:
 
         y_test_pred = booster.predict(self.X_test, raw_score=False).argmax(axis=1)
 
         # feature importance
         lightgbm.plot_importance(booster, figsize=(12, 6), importance_type="gain")
         plt.savefig(self.DUMP_DIR / f"{dump_prefix}_feature_importance.png")
-        plt.close() 
+        plt.close()
 
         # metric plot
-        lightgbm.plot_metric(evals_result, "my_auc_avg")
+        lightgbm.plot_metric(evals_result, metric_name)
         plt.savefig(self.DUMP_DIR / f"{dump_prefix}_metric_plot.png")
-        plt.close() 
+        plt.close()
 
         # confusion matrix
-        cnf_matrix = confusion_matrix(self.y_test, y_test_pred, labels=self.classes, normalize="true")
+        cnf_matrix = confusion_matrix(
+            self.y_test, y_test_pred, labels=self.classes, normalize="true"
+        )
         cnf_disp = ConfusionMatrixDisplay(cnf_matrix, display_labels=self.labels)
         cnf_disp.plot()
         plt.xticks(rotation=90)
@@ -51,5 +66,9 @@ class LightGBMScorer:
         labels = label_encoder.inverse_transform(self.classes)
         for idx, label in enumerate(labels):
             y_score = booster.predict(self.X_test)[:, idx]
-            roc[label] = roc_auc_score(y_test_binarized[:, idx], y_score, multi_class="ovo")
-        return pd.DataFrame.from_dict(roc, orient="index", columns=["auc"]).assign(model_name=model_name)
+            roc[label] = roc_auc_score(
+                y_test_binarized[:, idx], y_score, multi_class="ovo"
+            )
+        return pd.DataFrame.from_dict(roc, orient="index", columns=["auc"]).assign(
+            model_name=model_name
+        )
