@@ -1,13 +1,17 @@
 import optuna
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
-from joblib import dump
+
 
 from services.loader import DataLoader
 from services.processor import DataProcessor
 from services.optimizer import LightGBMOptimizer
 from services.scorer import LightGBMScorer
 from config import *
+
+
+DEFAULT_LGBM_NAME: str = "default_lgbm"
+OPTIMIZED_LGBM_NAME: str = "optimized_lgbm"
 
 
 def main():
@@ -24,6 +28,7 @@ def main():
     )
     data_processor.run()
 
+    # HPs optimization
     optimizer = LightGBMOptimizer(data_processor)
     study = optuna.create_study(direction=OPTIMIZATION_DIRECTION)
     study.optimize(
@@ -42,38 +47,29 @@ def main():
 
     # Train and score models
     default_lgbm, evals_result = optimizer.train_model(BASE_PARAMS)
-    _ = scorer.plot_results(default_lgbm, evals_result, LGBM_METRIC_NAME, "default")
+    _ = scorer.plot_results(
+        default_lgbm, evals_result, LGBM_METRIC_NAME, DEFAULT_LGBM_NAME
+    )
 
     hp_params = best_params.copy()
     hp_params.update(BASE_PARAMS)
     hp_params["num_boost_round"] = best_num_boost_round
     optimized_lgbm, evals_result = optimizer.train_model(hp_params)
-    _ = scorer.plot_results(optimized_lgbm, evals_result, LGBM_METRIC_NAME, "optimized")
+    _ = scorer.plot_results(
+        optimized_lgbm, evals_result, LGBM_METRIC_NAME, OPTIMIZED_LGBM_NAME
+    )
 
-    # Score models
-    default_lgbm_df = scorer.score_model(
+    # Save & score models
+    _ = scorer.save_and_score_model(
         default_lgbm,
-        "default_lgbm",
+        DEFAULT_LGBM_NAME,
         data_processor.label_encoder,
     )
-    optimized_lgbm_df = scorer.score_model(
+    _ = scorer.save_and_score_model(
         optimized_lgbm,
-        "optimized_lgbm",
+        OPTIMIZED_LGBM_NAME,
         data_processor.label_encoder,
     )
-
-    scores_df = (
-        pd.concat([default_lgbm_df, optimized_lgbm_df])
-        .reset_index(drop=True)
-        .rename(columns={"index": "label"})
-    )
-
-    # Dump models and scores_df
-    dump(default_lgbm, "dump/default_lgbm.joblib")
-    dump(optimized_lgbm, "dump/optimized_lgbm.joblib")
-    scores_df.to_csv("dump/scores_df.csv", index=False)
-
-    print("Models and scores dataframe have been saved to the 'dump' directory.")
 
 
 if __name__ == "__main__":
